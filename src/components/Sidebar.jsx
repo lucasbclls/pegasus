@@ -8,7 +8,8 @@ import {
   LogOut,
   LayoutDashboard,
   HelpCircle,
-  Info
+  Info,
+  Wrench
 } from 'lucide-react';
 
 const Sidebar = ({ isOpen, onMouseEnter, onMouseLeave, onSetSidebarOpen }) => {
@@ -47,9 +48,24 @@ const Sidebar = ({ isOpen, onMouseEnter, onMouseLeave, onSetSidebarOpen }) => {
         >
           <LayoutDashboard size={18} /> Painel
         </Link>
+<hr className="my-4 border-gray-300" />
+        <Link
+          to="/gerenciamento"
+          className="flex items-center gap-2 py-2 px-3 rounded hover:bg-gray-100 transition duration-150 ease-in-out"
+          onClick={() => onSetSidebarOpen(false)}
+        >
+          <ClipboardList size={18} /> Gerenciamento de Chamados
+        </Link>
 
+        <Link
+          to="/execucao-sar"
+          className="flex items-center gap-2 py-2 px-3 rounded hover:bg-gray-100 transition duration-150 ease-in-out"
+          onClick={() => onSetSidebarOpen(false)}
+        >
+          <Wrench size={18} /> Execução de Sar
+        </Link>
 
-        <hr className="my-4 border-gray-300" />
+        
 
       </nav>
 

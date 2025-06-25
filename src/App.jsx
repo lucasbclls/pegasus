@@ -1,8 +1,10 @@
+
 // src/App.jsx
 import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 
 import GerenciamentoChamados from './pages/GerenciamentoChamados';
+import ExecucaoSar from './pages/ExecucaoSar';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import FormularioChamadoPage from './pages/FormularioChamadoPage';
@@ -26,8 +28,6 @@ function PublicLayout() {
     </>
   );
 }
-
-
 
 // Layout para páginas protegidas com sidebar, header e footer
 function ProtectedLayout({
@@ -58,7 +58,7 @@ function ProtectedLayout({
 }
 
 function App() {
-  const [sidebarOpen, setSidebarOpen] = useState(true); // Certifique-se de que está inicializando como true
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const handleToggleSidebar = () => setSidebarOpen(!sidebarOpen);
   const handleMouseEnterSidebar = () => setSidebarOpen(true);
   const handleMouseLeaveSidebar = () => setSidebarOpen(false);
@@ -89,7 +89,8 @@ function App() {
             }
           >
             <Route path="/gerenciamento" element={<GerenciamentoChamados />} />
-            <Route path="/novo-chamado" element={<FormularioChamadoPage />} /> {/* ✅ Aqui está */}
+            <Route path="/execucao-sar" element={<ExecucaoSar />} />
+            <Route path="/novo-chamado" element={<FormularioChamadoPage />} />
           </Route>
 
           {/* Redireciona qualquer outra rota para login */}
