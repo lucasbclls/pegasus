@@ -578,6 +578,8 @@ def liberar_chamado_endpoint(id):
 
 # ============= ROTAS DE FINALIZAÇÃO E CANCELAMENTO =============
 
+# ============= ROTAS DE FINALIZAÇÃO E CANCELAMENTO =============
+
 @app.route("/chamados/<int:id>/finalizar", methods=["PUT", "OPTIONS"])
 @cross_origin(methods=["PUT", "OPTIONS"], supports_credentials=True)
 def finalizar_chamado(id):
@@ -590,6 +592,7 @@ def finalizar_chamado(id):
         if not verificar_status_chamado(id):
             return jsonify({"erro": "Chamado não encontrado"}), 404
 
+        # Finalizar o chamado no banco de dados
         db_success = update_database_optimized(id, 'delete')
         
         if not db_success:
@@ -599,6 +602,7 @@ def finalizar_chamado(id):
         def update_external_systems():
             try:
                 excel_result = update_excel_optimized(id, 'Concluido')
+                # Finalizar no Redmine com status 5 (concluído)
                 redmine_result = update_redmine_optimized(id, 5)
                 logging.info(f"Chamado {id} finalizado - Excel: {excel_result}, Redmine: {redmine_result}")
             except Exception as e:
@@ -620,8 +624,10 @@ def finalizar_chamado(id):
         logging.error(f"Erro crítico ao finalizar chamado {id} (tempo: {tempo_erro:.2f}s): {e}")
         return jsonify({"erro": "Erro interno do servidor"}), 500
 
-@app.route("/chamados/<int:id>/cancelar", methods=["PUT", "OPTIONS"])
-@cross_origin(methods=["PUT", "OPTIONS"], supports_credentials=True)
+
+
+
+
 def cancelar_chamado(id):
     if request.method == "OPTIONS":
         return '', 200
@@ -661,6 +667,11 @@ def cancelar_chamado(id):
         tempo_erro = time.time() - start_time
         logging.error(f"Erro ao cancelar chamado {id} (tempo: {tempo_erro:.2f}s): {e}")
         return jsonify({"erro": "Erro interno do servidor"}), 500
+
+
+
+
+
 
 # ============= ROTAS DE OBSERVAÇÕES =============
 

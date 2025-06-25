@@ -73,6 +73,11 @@ const ChamadoCard = ({
   const [isObservacoesOpen, setIsObservacoesOpen] = useState(false);
   const [novaObservacaoTexto, setNovaObservacaoTexto] = useState("");
 
+  // 🆕 NOVOS ESTADOS para modal de fechamento
+  const [showModalFechamento, setShowModalFechamento] = useState(false);
+  const [observacaoFechamento, setObservacaoFechamento] = useState("");
+  const [loadingFechamento, setLoadingFechamento] = useState(false);
+
   // Estados para observações
   const [historicoObservacoes, setHistoricoObservacoes] = useState([]);
   const [loadingObservacoes, setLoadingObservacoes] = useState(true);
@@ -290,8 +295,77 @@ const ChamadoCard = ({
   }, [isObservacoesOpen]);
 
   const handleStatusChange = (event) => {
-    setNovoStatus(event.target.value);
-    setConfirmarStatus(true);
+    const novoStatusSelecionado = event.target.value;
+    setNovoStatus(novoStatusSelecionado);
+    
+    // 🆕 Se o status for "Concluído", abre o modal de fechamento
+    if (novoStatusSelecionado === "Concluído") {
+      setShowModalFechamento(true);
+      // Não define confirmarStatus como true aqui
+    } else {
+      setConfirmarStatus(true);
+    }
+  };
+
+  // 🆕 NOVA FUNÇÃO para processar o fechamento com observação
+  const handleConfirmarFechamento = async () => {
+    if (observacaoFechamento.trim() === "") {
+      mostrarNotificacao("Por favor, adicione uma observação de fechamento.", 'error');
+      return;
+    }
+
+    setLoadingFechamento(true);
+    try {
+      // 1️⃣ PRIMEIRO: Adicionar a observação de fechamento
+      const observacaoPayload = {
+        observacao: `[FECHAMENTO] ${observacaoFechamento.trim()}`,
+        usuario: usuario?.nome || "Sistema",
+      };
+
+      const observacaoResponse = await fetch(
+        `http://localhost:5000/chamados/${id}/observacao`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(observacaoPayload),
+        }
+      );
+
+      if (!observacaoResponse.ok) {
+        throw new Error("Erro ao adicionar observação de fechamento");
+      }
+
+      // 2️⃣ SEGUNDO: Finalizar o chamado
+      const finalizarResponse = await fetch(`http://localhost:5000/chamados/${id}/finalizar`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (finalizarResponse.ok) {
+        setShowModalFechamento(false);
+        setObservacaoFechamento("");
+        onAtualizarStatus?.(id, "Concluído", historicoObservacoes, responsavelAtual);
+        mostrarNotificacao("Chamado finalizado com sucesso!", 'success');
+      } else {
+        throw new Error("Erro ao finalizar o chamado.");
+      }
+    } catch (error) {
+      console.error(error);
+      mostrarNotificacao(`Erro: ${error.message}`, 'error');
+    } finally {
+      setLoadingFechamento(false);
+    }
+  };
+
+  // 🆕 FUNÇÃO para cancelar o fechamento
+  const handleCancelarFechamento = () => {
+    setShowModalFechamento(false);
+    setObservacaoFechamento("");
+    setNovoStatus(currentStatus); // Volta para o status anterior
   };
 
   const handleConfirmarStatus = async () => {
@@ -299,9 +373,7 @@ const ChamadoCard = ({
       let url = "";
       let payload = {};
 
-      if (novoStatus === "Concluído") {
-        url = `http://localhost:5000/chamados/${id}/finalizar`;
-      } else if (novoStatus === "Cancelado") {
+      if (novoStatus === "Cancelado") {
         url = `http://localhost:5000/chamados/${id}/cancelar`;
       } else {
         url = `http://localhost:5000/chamados/${id}`;
@@ -610,6 +682,54 @@ const ChamadoCard = ({
           {prioridade}
         </span>
       </div>
+
+      {/* 🆕 MODAL DE FECHAMENTO */}
+      {showModalFechamento && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">
+              🏁 Finalizar Chamado #{id}
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Adicione uma observação de fechamento descrevendo a solução ou resolução do chamado:
+            </p>
+            <textarea
+              className="w-full border border-gray-300 rounded-md p-3 text-sm resize-none"
+              rows="4"
+              placeholder="Ex: Problema resolvido através de reinicialização do equipamento. Cliente testou e confirmou funcionamento normal."
+              value={observacaoFechamento}
+              onChange={(e) => setObservacaoFechamento(e.target.value)}
+              disabled={loadingFechamento}
+            />
+            <div className="flex space-x-3 mt-4">
+              <button
+                onClick={handleConfirmarFechamento}
+                disabled={loadingFechamento}
+                className="flex-1 bg-green-500 hover:bg-green-700 disabled:bg-green-300 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200"
+              >
+                {loadingFechamento ? (
+                  <div className="flex items-center justify-center space-x-2">
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-3.647z"/>
+                    </svg>
+                    <span>Finalizando...</span>
+                  </div>
+                ) : (
+                  '✅ Finalizar Chamado'
+                )}
+              </button>
+              <button
+                onClick={handleCancelarFechamento}
+                disabled={loadingFechamento}
+                className="flex-1 bg-gray-300 hover:bg-gray-400 disabled:bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-md transition-colors duration-200"
+              >
+                ❌ Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Seção de Observações */}
       <div className="relative z-0" ref={popoverContainerRef}>
