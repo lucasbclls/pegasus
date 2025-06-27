@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import axios from "axios";
 
 const SarCard = ({ 
   sar, 
@@ -11,37 +10,39 @@ const SarCard = ({
   usuario 
 }) => {
   const {
-    id, // numeroSar da ExecucaoSar
+    id, // Este será o NumSar
     numeroSar,
-    titulo,
     status: currentStatus = "Pendente",
     prioridade = "Normal",
     responsavel,
-    tipoServico,
-    equipamento,
-    cliente,
-    endereco,
-    bairro,
+    responsavelDTC,
+    dataSolicitacao,
     cidade,
-    tecnologia,
-    descricaoServico,
-    tempoEstimado,
-    dataAgendamento,
-    horaInicio,
-    horaConclusao,
-    // Campos específicos da ExecucaoSar
+    acao,
+    areaTecnica,
     designacao,
+    enderecoNap,
     quantPort,
     caminho,
+    responsavelHub,
     dataVenc,
+    dataExecucao,
     dataCancelamento,
     idadeExecucao,
     anoMes,
-    responsavelHub,
-    responsavelDTC,
-    acao,
-    areaTecnica
+    idRedmine,
+    // Campos de compatibilidade
+    tipoServico,
+    cliente,
+    endereco,
+    tecnologia,
+    descricaoServico,
+    observacoes,
   } = sar;
+
+  // Usar NumSar como identificador principal
+  const sarIdentifier = numeroSar || id;
+  const responsavelAtualReal = responsavelDTC || responsavel;
 
   // Função para gerar avatar com iniciais
   const generateAvatar = (nome) => {
@@ -90,70 +91,45 @@ const SarCard = ({
   const [errorObservacoes, setErrorObservacoes] = useState(null);
 
   // Estados para assumir SAR
-  const [responsavelAtual, setResponsavelAtual] = useState(responsavel);
+  const [responsavelAtual, setResponsavelAtual] = useState(responsavelAtualReal);
   const [loadingAssumir, setLoadingAssumir] = useState(false);
 
   const popoverContainerRef = useRef(null);
   const [openAbove, setOpenAbove] = useState(false);
 
-  // ✅ Função para obter URL do backend funcionando
-  const getBackendUrl = () => {
-    return localStorage.getItem('backend_url') || 'http://localhost:5002';
-  };
-
   // useEffect para sincronizar com as props
   useEffect(() => {
-    if (responsavel !== responsavelAtual) {
-      console.log('SarCard ExecucaoSar - Atualizando responsável:', {
-        numeroSar: numeroSar,
-        responsavelProp: responsavel,
+    if (responsavelAtualReal !== responsavelAtual) {
+      console.log('SarCard - Atualizando responsável:', {
+        sarId: sarIdentifier,
+        responsavelProp: responsavelAtualReal,
         responsavelAtual: responsavelAtual,
         atualizando: true
       });
-      setResponsavelAtual(responsavel);
+      setResponsavelAtual(responsavelAtualReal);
     }
-  }, [responsavel, numeroSar]);
+  }, [responsavelAtualReal]);
 
-  // useEffect para carregar observações salvas no localStorage
-  useEffect(() => {
-    const carregarObservacoesSalvas = () => {
-      try {
-        const observacoesSalvas = localStorage.getItem(`observacoes_${numeroSar}`);
-        if (observacoesSalvas) {
-          const observacoesParsed = JSON.parse(observacoesSalvas);
-          setHistoricoObservacoes(observacoesParsed);
-          console.log(`✅ Observações carregadas do localStorage para SAR ${numeroSar}:`, observacoesParsed);
-        }
-      } catch (error) {
-        console.error('Erro ao carregar observações do localStorage:', error);
-      } finally {
-        setLoadingObservacoes(false);
-      }
-    };
-
-    if (numeroSar) {
-      carregarObservacoesSalvas();
-    }
-  }, [numeroSar]);
-
-  // Função para salvar observações no localStorage
-  const salvarObservacoesLocalStorage = (observacoes) => {
-    try {
-      localStorage.setItem(`observacoes_${numeroSar}`, JSON.stringify(observacoes));
-      console.log(`💾 Observações salvas no localStorage para SAR ${numeroSar}:`, observacoes);
-    } catch (error) {
-      console.error('Erro ao salvar observações no localStorage:', error);
-    }
-  };
-
-  // Função para carregar observações do backend
+  // ✅ ALTERADO: Função para carregar observações do backend - PORTA 5007
   const carregarObservacoes = async () => {
     setLoadingObservacoes(true);
     setErrorObservacoes(null);
     try {
-      // TODO: Implementar chamada para API de observações da ExecucaoSar
-      // Por enquanto, as observações já estão carregadas do localStorage no useEffect
-      console.log('Observações já carregadas do localStorage');
+      const response = await fetch(`http://localhost:5007/sars/${sarIdentifier}/observacoes`);
+      if (!response.ok) {
+        throw new Error(`Erro ao carregar observações: ${response.statusText}`);
+      }
+      const data = await response.json();
+      if (Array.isArray(data.observacoes)) {
+        const observacoesOrdenadas = data.observacoes.sort((a, b) => {
+          const dateA = new Date(a.timestamp || 0).getTime();
+          const dateB = new Date(b.timestamp || 0).getTime();
+          return dateA - dateB;
+        });
+        setHistoricoObservacoes(observacoesOrdenadas);
+      } else {
+        setHistoricoObservacoes([]);
+      }
     } catch (err) {
       console.error("Falha ao carregar observações:", err);
       setErrorObservacoes("Não foi possível carregar as observações.");
@@ -161,17 +137,6 @@ const SarCard = ({
       setLoadingObservacoes(false);
     }
   };
-
-  useEffect(() => {
-    if (isObservacoesOpen && popoverContainerRef.current) {
-      const rect = popoverContainerRef.current.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const popoverEstimatedHeight = 300;
-      setOpenAbove(
-        spaceBelow < popoverEstimatedHeight && rect.top > popoverEstimatedHeight
-      );
-    }
-  }, [isObservacoesOpen]);
 
   // Função para mostrar notificação visual
   const mostrarNotificacao = (mensagem, tipo = 'success') => {
@@ -204,87 +169,121 @@ const SarCard = ({
     }, 3000);
   };
 
-  // Função para assumir o SAR
-  // 🔧 CORREÇÃO 1: Mover a atualização do estado para DEPOIS da requisição bem-sucedida
-
-// Função para liberar o SAR - CORRIGIDA
-const handleLiberarSar = async () => {
-  setLoadingAssumir(true);
-  try {
-    // ✅ Primeiro faz a requisição para o backend
-    const backendUrl = getBackendUrl();
-    const response = await axios.put(`${backendUrl}/sars/${numeroSar}/liberar`, {
-      apenas_visual: false
-    });
-
-    console.log('✅ SAR liberado no backend ExecucaoSar:', response.data);
-    
-    // ✅ SÓ ATUALIZA O ESTADO APÓS SUCESSO
-    setResponsavelAtual(null);
-    
-    if (onAtualizarResponsavel) {
-      onAtualizarResponsavel(numeroSar, null);
+  // ✅ ALTERADO: Função para assumir o SAR - PORTA 5007
+  const handleAssumirSar = async () => {
+    if (temResponsavel) {
+      mostrarNotificacao(`Este SAR já foi assumido por ${responsavelAtual}`, 'error');
+      return;
     }
-    
-    mostrarNotificacao("✅ SAR liberado com sucesso!", 'success');
-    
-  } catch (error) {
-    console.error("❌ Erro ao liberar SAR ExecucaoSar:", error);
-    mostrarNotificacao(`❌ Erro ao liberar SAR: ${error.response?.data?.erro || error.message}`, 'error');
-    // ✅ Em caso de erro, mantém o estado atual
-  } finally {
-    setLoadingAssumir(false);
-  }
-};
 
-// Função para assumir o SAR - CORRIGIDA  
-const handleAssumirSar = async () => {
-  // ✅ Validação extra para evitar assumir com responsável null
-  if (temResponsavel) {
-    mostrarNotificacao(`Este SAR já foi assumido por ${responsavelAtual}`, 'error');
-    return;
-  }
+    setLoadingAssumir(true);
+    const usuarioLogado = JSON.parse(localStorage.getItem('usuario')) || { nome: 'Usuário' };
 
-  setLoadingAssumir(true);
-  const usuarioLogado = JSON.parse(localStorage.getItem('usuario')) || { nome: 'Usuário' };
+    try {
+      const response = await fetch(`http://localhost:5007/sars/${sarIdentifier}/assumir`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ 
+          responsavel: usuarioLogado.nome,
+          apenas_visual: true
+        }),
+      });
 
-  // ✅ Validação extra
-  if (!usuarioLogado.nome || usuarioLogado.nome === 'null' || usuarioLogado.nome === null) {
-    mostrarNotificacao('❌ Erro: Usuário não identificado', 'error');
-    setLoadingAssumir(false);
-    return;
-  }
+      const data = await response.json();
+      console.log('🔄 RESPOSTA DA API SAR:', data);
 
-  try {
-    // ✅ Primeiro faz a requisição para o backend
-    const backendUrl = getBackendUrl();
-    const response = await axios.put(`${backendUrl}/sars/${numeroSar}/assumir`, {
-      responsavel: usuarioLogado.nome,
-      apenas_visual: false
-    });
-
-    console.log('✅ SAR assumido no backend ExecucaoSar:', response.data);
-    
-    // ✅ SÓ ATUALIZA O ESTADO APÓS SUCESSO
-    const nomeUsuario = usuarioLogado.nome;
-    setResponsavelAtual(nomeUsuario);
-    
-    if (onAtualizarResponsavel) {
-      onAtualizarResponsavel(numeroSar, nomeUsuario);
+      if (response.ok && data.success) {
+        const nomeUsuario = data.responsavel_nome || usuarioLogado.nome;
+        
+        console.log('✅ Assumindo SAR - Estado antes:', responsavelAtual);
+        setResponsavelAtual(nomeUsuario);
+        console.log('✅ Assumindo SAR - Estado depois:', nomeUsuario);
+        
+        if (onAtualizarResponsavel) {
+          console.log('✅ Chamando onAtualizarResponsavel');
+          onAtualizarResponsavel(sarIdentifier, nomeUsuario);
+        }
+        else if (onAtualizarStatus) {
+          console.log('✅ Chamando onAtualizarStatus');
+          await onAtualizarStatus(sarIdentifier, currentStatus, historicoObservacoes, nomeUsuario);
+        }
+        
+        mostrarNotificacao(`✅ SAR assumido por ${nomeUsuario}!`, 'success');
+        
+        console.log(`✅ SAR ${sarIdentifier} assumido por ${nomeUsuario} (apenas visual: ${data.apenas_visual})`);
+      } else if (response.status === 409) {
+        mostrarNotificacao('❌ Este SAR já foi assumido por outro usuário!', 'error');
+        if (onRecarregarSars) {
+          onRecarregarSars();
+        }
+      } else {
+        throw new Error(data.erro || "Erro ao assumir o SAR");
+      }
+    } catch (error) {
+      console.error("Erro ao assumir SAR:", error);
+      mostrarNotificacao(`Erro ao assumir SAR: ${error.message}`, 'error');
+    } finally {
+      setLoadingAssumir(false);
     }
-    
-    mostrarNotificacao(`✅ SAR assumido por ${nomeUsuario}!`, 'success');
-    
-  } catch (error) {
-    console.error("❌ Erro ao assumir SAR ExecucaoSar:", error);
-    mostrarNotificacao(`❌ Erro ao assumir SAR: ${error.response?.data?.erro || error.message}`, 'error');
-    // ✅ Em caso de erro, mantém o estado atual
-  } finally {
-    setLoadingAssumir(false);
-  }
-};
+  };
 
+  // ✅ ALTERADO: Função para liberar o SAR - PORTA 5007
+  const handleLiberarSar = async () => {
+    setLoadingAssumir(true);
+    try {
+      const response = await fetch(`http://localhost:5007/sars/${sarIdentifier}/liberar`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          apenas_visual: true
+        }),
+      });
 
+      const data = await response.json();
+      console.log('🔄 RESPOSTA DA API LIBERAR SAR:', data);
+
+      if (response.ok && data.success) {
+        console.log('✅ LIBERANDO SAR - Estado antes:', responsavelAtual);
+        setResponsavelAtual(null);
+        console.log('✅ LIBERANDO SAR - Estado depois: null');
+        
+        if (onAtualizarResponsavel) {
+          console.log('✅ Chamando onAtualizarResponsavel com null');
+          onAtualizarResponsavel(sarIdentifier, null);
+        }
+        else if (onAtualizarStatus) {
+          console.log('✅ Chamando onAtualizarStatus com null');
+          await onAtualizarStatus(sarIdentifier, currentStatus, historicoObservacoes, null);
+        }
+        
+        mostrarNotificacao("SAR liberado com sucesso!", 'success');
+        
+        console.log(`✅ SAR ${sarIdentifier} liberado (apenas visual: ${data.apenas_visual})`);
+      } else {
+        throw new Error(data.erro || "Erro ao liberar o SAR");
+      }
+    } catch (error) {
+      console.error("Erro ao liberar SAR:", error);
+      mostrarNotificacao(`Erro ao liberar SAR: ${error.message}`, 'error');
+    } finally {
+      setLoadingAssumir(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isObservacoesOpen && popoverContainerRef.current) {
+      const rect = popoverContainerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const popoverEstimatedHeight = 300;
+      setOpenAbove(
+        spaceBelow < popoverEstimatedHeight && rect.top > popoverEstimatedHeight
+      );
+    }
+  }, [isObservacoesOpen]);
 
   const handleStatusChange = (event) => {
     const novoStatusSelecionado = event.target.value;
@@ -297,7 +296,7 @@ const handleAssumirSar = async () => {
     }
   };
 
-  // Função para processar o fechamento com observação
+  // ✅ ALTERADO: Função para processar o fechamento com observação - PORTA 5007
   const handleConfirmarFechamento = async () => {
     if (observacaoFechamento.trim() === "") {
       mostrarNotificacao("Por favor, adicione uma observação de fechamento.", 'error');
@@ -306,35 +305,46 @@ const handleAssumirSar = async () => {
 
     setLoadingFechamento(true);
     try {
-      // ✅ Adicionar observação de fechamento ao histórico
-      const usuarioLogado = JSON.parse(localStorage.getItem('usuario')) || { nome: 'Sistema' };
-      const observacaoFinal = {
-        usuario: usuarioLogado.nome,
-        observacao: `🏁 SAR FINALIZADO: ${observacaoFechamento.trim()}`,
-        data: new Date().toISOString(),
-        timestamp: new Date().toISOString()
+      // 1️⃣ PRIMEIRO: Adicionar a observação de fechamento
+      const observacaoPayload = {
+        observacao: `[FECHAMENTO] ${observacaoFechamento.trim()}`,
+        usuario: usuario?.nome || "Sistema",
       };
 
-      const observacoesAtualizadas = [...historicoObservacoes, observacaoFinal];
-      setHistoricoObservacoes(observacoesAtualizadas);
-      
-      // ✅ Salvar no localStorage
-      salvarObservacoesLocalStorage(observacoesAtualizadas);
+      const observacaoResponse = await fetch(
+        `http://localhost:5007/sars/${sarIdentifier}/observacao`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(observacaoPayload),
+        }
+      );
 
-      // ✅ Integração com API ExecucaoSar para finalizar - APENAS dados reais
-      const backendUrl = getBackendUrl();
-      const response = await axios.put(`${backendUrl}/sars/${numeroSar}/finalizar`, {
-  observacao: observacaoFechamento.trim()
-});
-      console.log('✅ SAR finalizado no backend ExecucaoSar:', response.data);
-      
-      setShowModalFechamento(false);
-      setObservacaoFechamento("");
-      onAtualizarStatus?.(numeroSar, "Concluído", observacoesAtualizadas, responsavelAtual);
-      mostrarNotificacao("✅ SAR finalizado com sucesso!", 'success');
+      if (!observacaoResponse.ok) {
+        throw new Error("Erro ao adicionar observação de fechamento");
+      }
+
+      // 2️⃣ SEGUNDO: Finalizar o SAR
+      const finalizarResponse = await fetch(`http://localhost:5007/sars/${sarIdentifier}/finalizar`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (finalizarResponse.ok) {
+        setShowModalFechamento(false);
+        setObservacaoFechamento("");
+        onAtualizarStatus?.(sarIdentifier, "Concluído", historicoObservacoes, responsavelAtual);
+        mostrarNotificacao("SAR finalizado com sucesso!", 'success');
+      } else {
+        throw new Error("Erro ao finalizar o SAR.");
+      }
     } catch (error) {
-      console.error("❌ Erro ao finalizar SAR ExecucaoSar:", error);
-      mostrarNotificacao(`❌ Erro ao finalizar SAR: ${error.response?.data?.erro || error.message}`, 'error');
+      console.error(error);
+      mostrarNotificacao(`Erro: ${error.message}`, 'error');
     } finally {
       setLoadingFechamento(false);
     }
@@ -346,26 +356,30 @@ const handleAssumirSar = async () => {
     setNovoStatus(currentStatus);
   };
 
+  // ✅ ALTERADO: Função para confirmar status - PORTA 5007
   const handleConfirmarStatus = async () => {
     try {
-      // ✅ Integração com API ExecucaoSar para atualizar status - APENAS dados reais
-      const backendUrl = getBackendUrl();
-      if (novoStatus === "Cancelado") {
-        const response = await axios.put(`${backendUrl}/sars/${numeroSar}/cancelar`);
-        console.log('✅ SAR cancelado no backend ExecucaoSar:', response.data);
+      const url = `http://localhost:5007/api/sars/${sarIdentifier}`;
+      const payload = { status: novoStatus };
+
+      const response = await fetch(url, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (response.ok) {
+        setConfirmarStatus(false);
+        onAtualizarStatus?.(sarIdentifier, novoStatus, historicoObservacoes, responsavelAtual);
+        mostrarNotificacao(`Status atualizado para: ${novoStatus}`, 'success');
       } else {
-        const response = await axios.put(`${backendUrl}/api/sars/${numeroSar}`, {
-          status: novoStatus
-        });
-        console.log('✅ Status SAR atualizado no backend ExecucaoSar:', response.data);
+        throw new Error("Erro ao atualizar o status do SAR.");
       }
-      
-      setConfirmarStatus(false);
-      onAtualizarStatus?.(numeroSar, novoStatus, historicoObservacoes, responsavelAtual);
-      mostrarNotificacao(`✅ Status atualizado para: ${novoStatus}`, 'success');
     } catch (error) {
-      console.error("❌ Erro ao atualizar status ExecucaoSar:", error);
-      mostrarNotificacao(`❌ Erro ao atualizar status: ${error.response?.data?.erro || error.message}`, 'error');
+      console.error(error);
+      mostrarNotificacao("Erro ao atualizar status", 'error');
     }
   };
 
@@ -377,11 +391,14 @@ const handleAssumirSar = async () => {
   const handleToggleObservacoes = () => {
     setIsObservacoesOpen((prev) => {
       const newState = !prev;
-      // Não precisa mais carregar do backend já que carregamos do localStorage no useEffect
+      if (newState && historicoObservacoes.length === 0) {
+        carregarObservacoes();
+      }
       return newState;
     });
   };
 
+  // ✅ ALTERADO: Função para adicionar observação - PORTA 5007
   const handleAdicionarObservacao = async () => {
     if (novaObservacaoTexto.trim() === "") {
       mostrarNotificacao("Por favor, digite uma observação.", 'error');
@@ -389,30 +406,32 @@ const handleAssumirSar = async () => {
     }
 
     try {
-      const usuarioLogado = JSON.parse(localStorage.getItem('usuario')) || { nome: 'Sistema' };
-      const novaObservacao = {
-        usuario: usuarioLogado.nome,
+      const payload = {
         observacao: novaObservacaoTexto.trim(),
-        data: new Date().toISOString(),
-        timestamp: new Date().toISOString()
+        usuario: usuario?.nome || "Usuário Anônimo",
       };
 
-      // ✅ Atualizar estado local
-      const observacoesAtualizadas = [...historicoObservacoes, novaObservacao];
-      setHistoricoObservacoes(observacoesAtualizadas);
-      
-      // ✅ Salvar no localStorage para persistir após F5
-      salvarObservacoesLocalStorage(observacoesAtualizadas);
-      
-      // TODO: Aqui você pode implementar chamada para API se necessário
-      // await axios.post(`http://127.0.0.1:5002/sars/${numeroSar}/observacao`, novaObservacao);
-      
-      setNovaObservacaoTexto("");
-      mostrarNotificacao("Observação adicionada com sucesso!", 'success');
-      
-      console.log(`✅ Nova observação adicionada ao SAR ${numeroSar}:`, novaObservacao);
+      const response = await fetch(
+        `http://localhost:5007/sars/${sarIdentifier}/observacao`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const data = await response.json();
+      if (response.ok) {
+        await carregarObservacoes();
+        setNovaObservacaoTexto("");
+        mostrarNotificacao("Observação adicionada com sucesso!", 'success');
+      } else {
+        throw new Error(data.erro || "Erro ao adicionar observação");
+      }
     } catch (error) {
-      console.error('Erro ao adicionar observação:', error);
+      console.error(error);
       mostrarNotificacao("Erro ao adicionar observação", 'error');
     }
   };
@@ -420,7 +439,7 @@ const handleAssumirSar = async () => {
   const prioridadeCores = {
     Alta: "bg-claro-red text-white",
     Média: "bg-yellow-500 text-white",
-    Normal: "bg-blue-500 text-white", 
+    Normal: "bg-blue-500 text-white",
     Baixa: "bg-green-500 text-white",
   };
 
@@ -429,6 +448,17 @@ const handleAssumirSar = async () => {
     try {
       const date = new Date(dateString);
       return format(date, "dd/MM/yyyy HH:mm", { locale: ptBR });
+    } catch (error) {
+      console.error("Erro ao formatar a data:", error);
+      return "-";
+    }
+  };
+
+  const formatDateOnly = (dateString) => {
+    if (!dateString) return "-";
+    try {
+      const date = new Date(dateString);
+      return format(date, "dd/MM/yyyy", { locale: ptBR });
     } catch (error) {
       console.error("Erro ao formatar a data:", error);
       return "-";
@@ -468,7 +498,7 @@ const handleAssumirSar = async () => {
   return (
     <div className="bg-gray-50 border border-gray-300/50 shadow-[0_8px_30px_rgba(0,0,0,0.25)] rounded-xl p-6 space-y-3">
       <h3 className="text-xl font-semibold text-gray-800">
-        {titulo || `SAR #${numeroSar}` || `${acao} - ${areaTecnica}`}
+        SAR #{numeroSar || sarIdentifier}
       </h3>
 
       {/* SEÇÃO - Responsável pelo SAR */}
@@ -526,7 +556,7 @@ const handleAssumirSar = async () => {
                   <>
                     <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-3.647z"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-3.647z"/>
                     </svg>
                     <span>Liberando...</span>
                   </>
@@ -548,7 +578,13 @@ const handleAssumirSar = async () => {
 
       <div className="text-sm text-gray-600 divide-y divide-gray-300/40">
         <p className="pb-1">
-          <span className="font-medium">Número SAR:</span> {numeroSar}
+          <span className="font-medium">Número SAR:</span> {numeroSar || sarIdentifier}
+        </p>
+        <p className="pb-1">
+          <span className="font-medium">Data Solicitação:</span> {formatDate(dataSolicitacao)}
+        </p>
+        <p className="pb-1">
+          <span className="font-medium">Cidade:</span> {cidade}
         </p>
         <p className="pb-1">
           <span className="font-medium">Ação:</span> {acao || tipoServico}
@@ -557,45 +593,38 @@ const handleAssumirSar = async () => {
           <span className="font-medium">Área Técnica:</span> {areaTecnica || tecnologia}
         </p>
         <p className="pb-1">
-          <span className="font-medium">Designação:</span> {designacao}
+          <span className="font-medium">Designação:</span> {designacao || cliente}
         </p>
         <p className="pb-1">
-          <span className="font-medium">Cidade:</span> {cidade}
+          <span className="font-medium">Endereço NAP:</span> {enderecoNap || endereco}
         </p>
         <p className="pb-1">
-          <span className="font-medium">Endereço NAP:</span> {endereco}
+          <span className="font-medium">Quantidade Portas:</span> {quantPort || '-'}
         </p>
         <p className="pb-1">
-          <span className="font-medium">Quantidade Portas:</span> {quantPort || 0}
+          <span className="font-medium">Responsável Hub:</span> {responsavelHub}
         </p>
         <p className="pb-1">
-          <span className="font-medium">Caminho:</span> {caminho || descricaoServico}
+          <span className="font-medium">Data Vencimento:</span> {formatDateOnly(dataVenc)}
         </p>
-        <p className="pb-1">
-          <span className="font-medium">Data Solicitação:</span> {formatDate(dataAgendamento)}
-        </p>
-        <p className="pb-1">
-          <span className="font-medium">Data Vencimento:</span> {formatDate(dataVenc)}
-        </p>
-        <p className="pb-1">
-          <span className="font-medium">Data Execução:</span> {formatDate(horaConclusao)}
-        </p>
+        {dataExecucao && (
+          <p className="pb-1">
+            <span className="font-medium">Data Execução:</span> {formatDate(dataExecucao)}
+          </p>
+        )}
         {dataCancelamento && (
           <p className="pb-1">
             <span className="font-medium">Data Cancelamento:</span> {formatDate(dataCancelamento)}
           </p>
         )}
-        <p className="pb-1">
-          <span className="font-medium">Idade Execução:</span> {idadeExecucao || 0} dias
-        </p>
-        {responsavelHub && (
+        {idadeExecucao && (
           <p className="pb-1">
-            <span className="font-medium">Responsável Hub:</span> {responsavelHub}
+            <span className="font-medium">Idade Execução (dias):</span> {idadeExecucao}
           </p>
         )}
-        {responsavelDTC && (
+        {idRedmine && idRedmine > 0 && (
           <p className="pb-1">
-            <span className="font-medium">Responsável DTC:</span> {responsavelDTC}
+            <span className="font-medium">ID Redmine:</span> {idRedmine}
           </p>
         )}
       </div>
@@ -648,7 +677,7 @@ const handleAssumirSar = async () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
             <h3 className="text-lg font-bold text-gray-900 mb-4">
-              🏁 Finalizar SAR #{numeroSar}
+              🏁 Finalizar SAR #{numeroSar || sarIdentifier}
             </h3>
             <p className="text-sm text-gray-600 mb-4">
               Adicione uma observação de fechamento descrevendo a execução do serviço:
@@ -656,7 +685,7 @@ const handleAssumirSar = async () => {
             <textarea
               className="w-full border border-gray-300 rounded-md p-3 text-sm resize-none"
               rows="4"
-              placeholder="Ex: Serviço executado conforme solicitado. Equipamento instalado e configurado. Cliente orientado sobre o funcionamento."
+              placeholder="Ex: Serviço executado conforme solicitado. Instalação realizada com sucesso. Cliente orientado sobre o procedimento."
               value={observacaoFechamento}
               onChange={(e) => setObservacaoFechamento(e.target.value)}
               disabled={loadingFechamento}
@@ -695,18 +724,11 @@ const handleAssumirSar = async () => {
       <div className="relative z-0" ref={popoverContainerRef}>
         <button
           onClick={handleToggleObservacoes}
-          className="w-full bg-claro-red hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200 flex items-center justify-center space-x-2"
+          className="w-full bg-claro-red hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200"
         >
-          <span>
-            {isObservacoesOpen
-              ? "Fechar Observações"
-              : "Ver/Adicionar Observações"}
-          </span>
-          {historicoObservacoes.length > 0 && (
-            <span className="bg-white text-claro-red rounded-full px-2 py-1 text-xs font-bold">
-              {historicoObservacoes.length}
-            </span>
-          )}
+          {isObservacoesOpen
+            ? "Fechar Observações"
+            : "Ver/Adicionar Observações"}
         </button>
 
         <div
@@ -720,28 +742,20 @@ const handleAssumirSar = async () => {
              ${openAbove ? "bottom-full mb-2" : "top-full mt-2"} left-0
 `}
         >
-          <div className="flex items-center justify-between mb-3 border-b pb-2">
-            <h4 className="text-lg font-bold">Histórico de Observações</h4>
-            {historicoObservacoes.length > 0 && (
-              <span className="text-xs text-gray-500">
-                {historicoObservacoes.length} observação{historicoObservacoes.length !== 1 ? 'ões' : ''}
-              </span>
-            )}
-          </div>
-          
+          <h4 className="text-lg font-bold mb-3 border-b pb-2">
+            Histórico de Observações
+          </h4>
           {loadingObservacoes ? (
             <p className="text-sm text-gray-600 italic">Carregando observações...</p>
           ) : errorObservacoes ? (
             <p className="text-sm text-red-600 italic">{errorObservacoes}</p>
           ) : historicoObservacoes.length === 0 ? (
             <p className="text-sm text-gray-600 italic">
-              Nenhuma observação ainda. Seja o primeiro a comentar!
+              Nenhuma observação ainda.
             </p>
           ) : (
             <div className="space-y-3 max-h-48 overflow-y-auto pr-2">
-              {historicoObservacoes
-                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)) // Mostrar mais recentes primeiro
-                .map((obs, index) => (
+              {historicoObservacoes.map((obs, index) => (
                 <div
                   key={index}
                   className="bg-blue-50/50 border p-3 rounded-lg"
@@ -777,13 +791,13 @@ const handleAssumirSar = async () => {
 
           <div className="mt-5 pt-4 border-t border-gray-200">
             <label
-              htmlFor={`nova-observacao-${numeroSar}`}
+              htmlFor={`nova-observacao-${sarIdentifier}`}
               className="block text-gray-700 text-sm font-bold mb-2"
             >
               Adicionar Nova Observação:
             </label>
             <textarea
-              id={`nova-observacao-${numeroSar}`}
+              id={`nova-observacao-${sarIdentifier}`}
               className="w-full border rounded-md p-2 text-sm resize-y"
               value={novaObservacaoTexto}
               onChange={(e) => setNovaObservacaoTexto(e.target.value)}

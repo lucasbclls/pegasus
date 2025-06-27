@@ -20,7 +20,7 @@ const ExecucaoSar = () => {
         console.log('🔄 Buscando SARs da API ExecucaoSar...');
         
         // ✅ Conectar com a API real do backend SAR
-        const response = await axios.get('http://localhost:5002/api/sars');
+        const response = await axios.get('http://localhost:5007/api/sars');
 
         console.log('✅ Dados recebidos da API ExecucaoSar:', response.data);
 
@@ -109,7 +109,7 @@ const ExecucaoSar = () => {
   const recarregarSars = async () => {
     console.log('🔄 Recarregando SARs da ExecucaoSar...');
     try {
-      const response = await axios.get('http://localhost:5002/api/sars');
+      const response = await axios.get('http://localhost:5007/api/sars');
       const sarsAtualizados = response.data.map((sar) => {
         const chaveUnica = sar.numeroSar || sar.NumSar;
         
@@ -168,13 +168,13 @@ const atualizarResponsavel = async (numeroSar, novoResponsavel) => {
     if (novoResponsavel === null || novoResponsavel === 'null' || !novoResponsavel) {
       // 🔓 LIBERAR - responsável é null
       console.log(`🔓 Liberando SAR ${numeroSar}`);
-      response = await axios.put(`http://localhost:5002/sars/${numeroSar}/liberar`, {
+      response = await axios.put(`http://localhost:5007/sars/${numeroSar}/liberar`, {
         apenas_visual: false
       });
     } else {
       // 🙋‍♂️ ASSUMIR - responsável tem valor
       console.log(`🙋‍♂️ Assumindo SAR ${numeroSar} para ${novoResponsavel}`);
-      response = await axios.put(`http://localhost:5002/sars/${numeroSar}/assumir`, {
+      response = await axios.put(`http://localhost:5007/sars/${numeroSar}/assumir`, {
         responsavel: novoResponsavel,
         apenas_visual: false
       });
@@ -221,7 +221,7 @@ const atualizarResponsavel = async (numeroSar, novoResponsavel) => {
     
     try {
       // ✅ PRIMEIRO: Tentar salvar no backend ExecucaoSar
-      const response = await axios.put(`http://localhost:5002/api/sars/${numeroSar}`, {
+      const response = await axios.put(`http://localhost:5007/api/sars/${numeroSar}`, {
         status: novoStatus,
         observacoes,
         responsavel: novoResponsavel
